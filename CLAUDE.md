@@ -27,6 +27,7 @@ Azuki 系 NFT（base.jpg）をベースに、フクロウなどのアイテム�
   - base.jpg / item.jpg のアップロード（`ImageUploader.tsx`）
   - item 画像の初期設置とドラッグ移動（`DraggableOverlay.tsx`）
   - 合成結果表示（`ResultViewer.tsx`）
+- frontend/src/app/page.tsx に記述している `await new Promise((resolve) => setTimeout(resolve, 1000));` は `/api/generate`をコールしている処理を想定したシミュレーション処理のため、実際は、API のレスポンスが変えるまでローディングしている処理となる
 
 🛠 Claude はこの既存 UI を壊さず、必要なバックエンド処理を統合してください。
 
