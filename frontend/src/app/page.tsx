@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Upload, Download, Sparkles } from "lucide-react";
+import ImageUploader from "@/components/ImageUploader";
+import DraggableOverlay from "@/components/DraggableOverlay";
+import ResultViewer from "@/components/ResultViewer";
+import { loadImage } from "@/lib/utils";
 
 interface Position {
   x: number;
@@ -22,21 +26,20 @@ export default function ImageComposer() {
   const [composedImage, setComposedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const composedCanvasRef = useRef<HTMLCanvasElement>(null);
-  const baseFileRef = useRef<HTMLInputElement>(null);
-  const itemFileRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(
+    null
+  ) as React.RefObject<HTMLCanvasElement>;
+  const composedCanvasRef = useRef<HTMLCanvasElement>(
+    null
+  ) as React.RefObject<HTMLCanvasElement>;
+  const baseFileRef = useRef<HTMLInputElement>(
+    null
+  ) as React.RefObject<HTMLInputElement>;
+  const itemFileRef = useRef<HTMLInputElement>(
+    null
+  ) as React.RefObject<HTMLInputElement>;
 
   const ITEM_SIZE = 100; // 固定サイズ
-
-  const loadImage = (file: File): Promise<HTMLImageElement> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = URL.createObjectURL(file);
-    });
-  };
 
   const handleBaseImageUpload = async (
     e: React.ChangeEvent<HTMLInputElement>
@@ -303,76 +306,18 @@ export default function ImageComposer() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="text-cyan-400 flex items-center gap-2">
-                <Upload className="w-5 h-5" />
-                Base Image
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Input
-                    ref={baseFileRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleBaseImageUpload}
-                    className="hidden"
-                  />
-                  <Button
-                    onClick={() => baseFileRef.current?.click()}
-                    className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload Base Image
-                  </Button>
-                </div>
-                {baseImage && (
-                  <div className="text-sm text-slate-400 bg-slate-700/50 p-3 rounded-lg">
-                    Size: {baseImage.width} × {baseImage.height}px
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+        {/* 画像アップロードUI */}
+        <ImageUploader
+          baseFileRef={baseFileRef}
+          itemFileRef={itemFileRef}
+          handleBaseImageUpload={handleBaseImageUpload}
+          handleItemImageUpload={handleItemImageUpload}
+          baseImage={baseImage}
+          itemImage={itemImage}
+          ITEM_SIZE={ITEM_SIZE}
+        />
 
-          <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="text-pink-400 flex items-center gap-2">
-                <Sparkles className="w-5 h-5" />
-                Item Image
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Input
-                    ref={itemFileRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleItemImageUpload}
-                    className="hidden"
-                  />
-                  <Button
-                    onClick={() => itemFileRef.current?.click()}
-                    className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white border-0"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload Item Image
-                  </Button>
-                </div>
-                {itemImage && (
-                  <div className="text-sm text-slate-400 bg-slate-700/50 p-3 rounded-lg">
-                    Display Size: {ITEM_SIZE} × {ITEM_SIZE}px (Fixed)
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
+        {/* プレビュー（ドラッグ可能なオーバーレイ） */}
         {baseImage && (
           <Card className="mb-8 bg-slate-800/50 border-slate-700 backdrop-blur-sm">
             <CardHeader>
@@ -387,19 +332,20 @@ export default function ImageComposer() {
               </p>
             </CardHeader>
             <CardContent>
-              <div className="flex justify-center mb-6">
-                <canvas
-                  ref={canvasRef}
-                  className="border-2 border-slate-600 cursor-move touch-none rounded-lg shadow-2xl"
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUp}
-                  onMouseLeave={handleMouseUp}
-                  onTouchStart={handleTouchStart}
-                  onTouchMove={handleTouchMove}
-                  onTouchEnd={handleTouchEnd}
-                />
-              </div>
+              <DraggableOverlay
+                baseImage={baseImage}
+                itemImage={itemImage}
+                itemPosition={itemPosition}
+                isDragging={isDragging}
+                canvasRef={canvasRef}
+                handleMouseDown={handleMouseDown}
+                handleMouseMove={handleMouseMove}
+                handleMouseUp={handleMouseUp}
+                handleMouseLeave={handleMouseUp}
+                handleTouchStart={handleTouchStart}
+                handleTouchMove={handleTouchMove}
+                handleTouchEnd={handleTouchEnd}
+              />
               <div className="flex justify-center">
                 <Button
                   onClick={composeImages}
@@ -424,69 +370,11 @@ export default function ImageComposer() {
           </Card>
         )}
 
-        {isGenerating && (
-          <Card className="mb-8 bg-slate-800/50 border-slate-700 backdrop-blur-sm">
-            <CardContent className="py-12">
-              <div className="flex flex-col items-center justify-center space-y-4">
-                <div className="relative">
-                  <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-600 border-t-cyan-400"></div>
-                  <div className="absolute inset-0 animate-ping rounded-full h-16 w-16 border-4 border-cyan-400 opacity-20"></div>
-                </div>
-                <div className="text-center">
-                  <h3 className="text-xl font-semibold text-cyan-400 mb-2">
-                    AI is generating your NFT...
-                  </h3>
-                  <p className="text-slate-400">This may take a few moments</p>
-                </div>
-                <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce"></div>
-                  <div
-                    className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
-                    style={{ animationDelay: "0.1s" }}
-                  ></div>
-                  <div
-                    className="w-2 h-2 bg-pink-400 rounded-full animate-bounce"
-                    style={{ animationDelay: "0.2s" }}
-                  ></div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {composedImage && (
-          <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="text-emerald-400 flex items-center gap-2">
-                <Download className="w-5 h-5" />
-                Generated NFT
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <div className="flex justify-center">
-                  <div className="relative">
-                    <img
-                      src={composedImage || "/placeholder.svg"}
-                      alt="Generated NFT"
-                      className="max-w-full h-auto border-2 border-emerald-400 rounded-lg shadow-2xl"
-                    />
-                    <div className="absolute -inset-1 bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-lg blur opacity-25"></div>
-                  </div>
-                </div>
-                <div className="flex justify-center">
-                  <Button
-                    onClick={downloadComposedImage}
-                    className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white border-0 px-6 py-2"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download NFT
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* 合成画像の表示 */}
+        <ResultViewer
+          composedImage={composedImage}
+          onDownload={downloadComposedImage}
+        />
 
         {/* 非表示の合成用キャンバス */}
         <canvas ref={composedCanvasRef} className="hidden" />
