@@ -53,9 +53,18 @@ router.post('/', async (req, res, next): Promise<any> => {
 
       console.log('Background removal completed, output size:', outputBuffer.length);
 
-      // 画像として直接レスポンス
-      res.set('Content-Type', 'image/png');
-      res.send(outputBuffer);
+      // 画像として直接レスポンス（CORS設定を一時的に変更、圧縮無効化）
+      res.set({
+        'Content-Type': 'image/png',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Credentials': 'false',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Content-Length': outputBuffer.length.toString()
+      });
+      res.removeHeader('Content-Encoding');
+      res.end(outputBuffer);
     } finally {
       // 一時ファイルを削除
       try {
