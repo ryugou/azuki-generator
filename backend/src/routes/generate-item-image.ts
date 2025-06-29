@@ -48,6 +48,11 @@ router.post('/', async (req, res): Promise<any> => {
       await fs.writeFile(baseImagePath, Buffer.from(base_image, 'base64'));
       await fs.writeFile(maskImagePath, Buffer.from(mask_image, 'base64'));
 
+      // デバッグ: 入力されたbase_image（item画像）を保存
+      const debugInputPath = path.join(process.cwd(), `debug_input_item_${Date.now()}.png`);
+      await fs.writeFile(debugInputPath, Buffer.from(base_image, 'base64'));
+      console.log('Debug input item image saved to:', debugInputPath);
+
       // DALL-E Edit APIを呼び出し - toFileを使用
       const openai = getOpenAIClient();
       
@@ -76,10 +81,16 @@ router.post('/', async (req, res): Promise<any> => {
 
       console.log('DALL-E Edit completed, returned image base64 length:', generatedImageBase64.length);
 
-      // デバッグ: 生成された画像をローカルに保存
-      debugImagePath = path.join(tempDir, `debug_generated_${uuidv4()}.png`);
+      // デバッグ: 生成された画像をローカルに保存（プロジェクトルートに保存）
+      debugImagePath = path.join(process.cwd(), `debug_generated_${Date.now()}.png`);
       await fs.writeFile(debugImagePath, Buffer.from(generatedImageBase64, 'base64'));
       console.log('Debug image saved to:', debugImagePath);
+
+      // デバッグ: 生成された画像を backend/tmp/result.png として保存（Dockerボリューム経由でローカルにアクセス可能）
+      const resultPath = '/app/tmp/result.png';
+      await fs.writeFile(resultPath, Buffer.from(generatedImageBase64, 'base64'));
+      console.log('DALL-E generated image saved to:', resultPath);
+      console.log('ローカルPCからは backend/tmp/result.png でアクセス可能');
 
       // Base64をBufferに変換して画像として返す
       const imageBuffer = Buffer.from(generatedImageBase64, 'base64');
@@ -93,10 +104,10 @@ router.post('/', async (req, res): Promise<any> => {
       try {
         await fs.unlink(baseImagePath);
         await fs.unlink(maskImagePath);
-        // デバッグファイルも削除（存在する場合）
-        if (debugImagePath && fsSync.existsSync(debugImagePath)) {
-          await fs.unlink(debugImagePath);
-        }
+        // デバッグファイルは削除しない（デバッグ用のため）
+        // if (debugImagePath && fsSync.existsSync(debugImagePath)) {
+        //   await fs.unlink(debugImagePath);
+        // }
       } catch (err) {
         console.error('Failed to clean up temp files:', err);
       }
