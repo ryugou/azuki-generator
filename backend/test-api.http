@@ -1,0 +1,59 @@
+### Test 1: Analyze Item Image
+POST http://localhost:8080/api/analyze-item-image
+Content-Type: application/json
+
+{
+  "item_image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+}
+
+### Test 2: Generate Prompt
+POST http://localhost:8080/api/generate-prompt
+Content-Type: application/json
+
+{
+  "image-info": {
+    "species": "owl",
+    "color": "pink",
+    "expression": "angry",
+    "style": "pixel art",
+    "missing_part": "lower body",
+    "caption": "A pixel art illustration of a pink owl character with sharp eyes, showing only the upper body."
+  }
+}
+
+### Test 3: Generate Mask Image
+POST http://localhost:8080/api/generate-mask-image
+Content-Type: application/json
+
+{
+  "item_image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "missing_part": "lower body"
+}
+
+### Test 4: Generate Item Image
+POST http://localhost:8080/api/generate-item-image
+Content-Type: application/json
+
+{
+  "base_image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "mask_image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "prompt": "A pixel art illustration of a pink owl character with sharp eyes and an angry expression"
+}
+
+### Test 5: Remove Background
+POST http://localhost:8080/api/remove-background
+Content-Type: application/json
+
+{
+  "image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+}
+
+### Test 6: Generate Final Image
+POST http://localhost:8080/api/generate
+Content-Type: application/json
+
+{
+  "base_image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "item_image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "position": { "x": 100, "y": 100 }
+}

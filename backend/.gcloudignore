@@ -1,0 +1,20 @@
+# This file specifies files that are *not* uploaded to Google Cloud Platform
+# using gcloud.
+
+.gcloudignore
+.git
+.gitignore
+.env
+.env.example
+README.md
+Dockerfile
+node_modules/
+test-*.js
+*.http
+debug_images/
+images/
+src/
+*.swp
+*.swo
+*~
+.DS_Store
