@@ -5,8 +5,7 @@ import type React from "react";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Upload, Download, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import ImageUploader from "@/components/ImageUploader";
 import DraggableOverlay from "@/components/DraggableOverlay";
 import ResultViewer from "@/components/ResultViewer";
@@ -25,6 +24,8 @@ export default function ImageComposer() {
   const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
   const [composedImage, setComposedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [stepResults, setStepResults] = useState<Record<number, any>>({});
 
   const canvasRef = useRef<HTMLCanvasElement>(
     null
@@ -233,60 +234,179 @@ export default function ImageComposer() {
     setIsDragging(false);
   };
 
-  const composeImages = async () => {
-    const canvas = composedCanvasRef.current;
-    if (!canvas || !baseImage) return;
+  const callAPIStep = async (step: number) => {
+    if (!baseImage || !itemImage) return;
 
-    // 既存の合成画像を非表示にする
-    setComposedImage(null);
     setIsGenerating(true);
 
     try {
-      // AIバックエンド処理をシミュレート（1秒待機）
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // バックエンドのURL
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+      
+      // base image
+      const baseCanvas = document.createElement("canvas");
+      const baseCtx = baseCanvas.getContext("2d");
+      if (!baseCtx) throw new Error("Could not get canvas context");
 
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
+      baseCanvas.width = baseImage.width;
+      baseCanvas.height = baseImage.height;
+      baseCtx.drawImage(baseImage, 0, 0);
+      const baseImageData = baseCanvas.toDataURL("image/png").split(",")[1];
 
-      // 元の画像サイズで合成
-      canvas.width = baseImage.width;
-      canvas.height = baseImage.height;
+      // item image
+      const itemCanvas = document.createElement("canvas");
+      const itemCtx = itemCanvas.getContext("2d");
+      if (!itemCtx) throw new Error("Could not get canvas context");
 
-      // 背景画像を描画
-      ctx.drawImage(baseImage, 0, 0);
+      itemCanvas.width = itemImage.width;
+      itemCanvas.height = itemImage.height;
+      itemCtx.drawImage(itemImage, 0, 0);
+      const itemImageData = itemCanvas.toDataURL("image/png").split(",")[1];
 
-      // アイテム画像を描画（スケール調整）- 合成時は実際の画像を使用
-      if (itemImage) {
-        const displayCanvas = canvasRef.current;
-        if (displayCanvas) {
-          const scaleX = baseImage.width / displayCanvas.width;
-          const scaleY = baseImage.height / displayCanvas.height;
+      // scale calculation
+      const displayCanvas = canvasRef.current;
+      if (!displayCanvas) throw new Error("Display canvas not found");
+      const scaleX = baseImage.width / displayCanvas.width;
+      const scaleY = baseImage.height / displayCanvas.height;
 
-          ctx.drawImage(
-            itemImage,
-            itemPosition.x * scaleX,
-            itemPosition.y * scaleY,
-            ITEM_SIZE * scaleX,
-            ITEM_SIZE * scaleY
-          );
-        }
+      let endpoint = "";
+      let requestBody: any = {};
+
+      switch (step) {
+        case 1:
+          endpoint = "/api/analyze-item-image";
+          requestBody = {
+            item_image: itemImageData,
+          };
+          break;
+        case 2:
+          endpoint = "/api/generate-prompt";
+          requestBody = {
+            "image-info": stepResults[1],
+          };
+          break;
+        case 3:
+          endpoint = "/api/generate-mask-image";
+          requestBody = {
+            item_image: itemImageData,
+            missing_part: stepResults[1]?.missing_part,
+          };
+          break;
+        case 4:
+          endpoint = "/api/generate-item-image";
+          requestBody = {
+            base_image: itemImageData,
+            mask_image: stepResults[3]?.mask_image,
+            prompt: stepResults[2]?.prompt,
+          };
+          break;
+        case 5:
+          endpoint = "/api/remove-background";
+          requestBody = {
+            image: stepResults[4]?.generated_image,
+          };
+          break;
+        case 6:
+          endpoint = "/api/generate";
+          requestBody = {
+            base_image: baseImageData,
+            item_image: stepResults[5]?.transparent_image,
+            position: {
+              x: Math.round(itemPosition.x * scaleX),
+              y: Math.round(itemPosition.y * scaleY),
+            },
+          };
+          break;
       }
 
-      // 合成画像をデータURLとして保存
-      const dataURL = canvas.toDataURL("image/png");
-      setComposedImage(dataURL);
+      console.log(`Step ${step} - Calling ${endpoint}:`, requestBody);
+
+      const response = await fetch(`${BACKEND_URL}${endpoint}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Backend API error: ${error}`);
+      }
+
+      // 画像を返すAPIの場合はBase64に変換
+      const contentType = response.headers.get('content-type');
+      let data: any;
+      
+      if (contentType && contentType.includes('image/')) {
+        const blob = await response.blob();
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string).split(',')[1]);
+          reader.readAsDataURL(blob);
+        });
+        
+        // APIのエンドポイントに応じて適切なキー名で保存
+        if (endpoint.includes('mask')) data = { mask_image: base64 };
+        else if (endpoint.includes('item-image')) data = { generated_image: base64 };
+        else if (endpoint.includes('background')) data = { transparent_image: base64 };
+      } else {
+        // JSONレスポンスの場合
+        data = await response.json();
+      }
+
+      console.log(`Step ${step} レスポンス:`, data);
+
+      // 各ステップの結果を保存
+      setStepResults(prev => ({
+        ...prev,
+        [step]: data,
+      }));
+
+      // Step 6の場合は最終画像を設定
+      if (step === 6) {
+        setComposedImage(data.result_image);
+      }
+
+    } catch (error) {
+      console.error(`Step ${step} Error:`, error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      alert(`Step ${step} の処理に失敗しました: ${errorMessage}`);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const downloadComposedImage = () => {
+  const downloadComposedImage = async () => {
     if (!composedImage) return;
 
-    const link = document.createElement("a");
-    link.download = "azuki-generated.png";
-    link.href = composedImage;
-    link.click();
+    try {
+      if (composedImage.startsWith("data:")) {
+        // Data URLの場合は直接ダウンロード
+        const link = document.createElement("a");
+        link.download = "azuki-generated.png";
+        link.href = composedImage;
+        link.click();
+      } else {
+        // GCS URLから画像をフェッチ
+        const response = await fetch(composedImage);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement("a");
+        link.download = "azuki-generated.png";
+        link.href = url;
+        link.click();
+
+        // クリーンアップ
+        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error("Download error:", error);
+      // フォールバック: 直接URLを開く
+      window.open(composedImage, "_blank");
+    }
   };
 
   return (
@@ -346,25 +466,123 @@ export default function ImageComposer() {
                 handleTouchMove={handleTouchMove}
                 handleTouchEnd={handleTouchEnd}
               />
-              <div className="flex justify-center">
-                <Button
-                  onClick={composeImages}
-                  disabled={!baseImage || !itemImage || isGenerating}
-                  size="lg"
-                  className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white border-0 px-8 py-3 text-lg font-semibold disabled:opacity-50"
-                >
-                  {isGenerating ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-5 h-5 mr-2" />
-                      Generate NFT
-                    </>
-                  )}
-                </Button>
+              
+              {/* Processing Controls */}
+              <div className="space-y-4 mt-6">
+                {/* ステップボタン */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {[1, 2, 3, 4, 5, 6].map((step) => (
+                    <Button
+                      key={step}
+                      onClick={() => callAPIStep(step)}
+                      disabled={!baseImage || !itemImage || isGenerating || (step > 1 && !stepResults[step - 1])}
+                      size="sm"
+                      variant={stepResults[step] ? "default" : "outline"}
+                      className={`text-sm ${
+                        stepResults[step] 
+                          ? "bg-green-600 hover:bg-green-700 text-white" 
+                          : "border-purple-400 text-purple-400 hover:bg-purple-400 hover:text-white"
+                      }`}
+                    >
+                      {isGenerating && currentStep === step ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-1"></div>
+                      ) : stepResults[step] ? (
+                        "✓"
+                      ) : null}
+                      Step {step}
+                    </Button>
+                  ))}
+                </div>
+
+                {/* ステップ結果表示 */}
+                {Object.keys(stepResults).length > 0 && (
+                  <div className="mt-4 p-4 bg-slate-700/50 rounded-lg">
+                    <h3 className="text-purple-400 font-semibold mb-2">処理結果:</h3>
+                    <div className="space-y-2 text-sm">
+                      {Object.entries(stepResults).map(([step, result]) => (
+                        <div key={step} className="text-slate-300">
+                          <span className="text-green-400">Step {step}:</span> {
+                            step === "1" ? `${result.species} (${result.color}) - ${result.missing_part}` :
+                            step === "2" ? `プロンプト生成完了: ${result.prompt?.substring(0, 50)}...` :
+                            step === "3" ? "マスク画像生成完了" :
+                            step === "4" ? "DALL-E画像生成完了" :
+                            step === "5" ? "背景除去完了" :
+                            step === "6" ? "最終合成完了" : "完了"
+                          }
+                          {/* 画像プレビュー（開発環境のみ） */}
+                          {process.env.NODE_ENV === "development" && (
+                            <>
+                              {step === "3" && result.mask_image && (
+                                <div className="mt-2">
+                                  <a 
+                                    href={`data:image/png;base64,${result.mask_image}`} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-blue-400 hover:underline text-xs"
+                                  >
+                                    マスク画像を確認 →
+                                  </a>
+                                </div>
+                              )}
+                              {step === "4" && result.generated_image && (
+                                <div className="mt-2">
+                                  <a 
+                                    href={`data:image/png;base64,${result.generated_image}`} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-blue-400 hover:underline text-xs"
+                                  >
+                                    DALL-E生成画像を確認 →
+                                  </a>
+                                </div>
+                              )}
+                              {step === "5" && result.transparent_image && (
+                                <div className="mt-2">
+                                  <a 
+                                    href={`data:image/png;base64,${result.transparent_image}`} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-blue-400 hover:underline text-xs"
+                                  >
+                                    背景除去画像を確認 →
+                                  </a>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-center pt-4">
+                  <Button
+                    onClick={async () => {
+                      for (let step = 1; step <= 6; step++) {
+                        if (!stepResults[step]) {
+                          setCurrentStep(step);
+                          await callAPIStep(step);
+                        }
+                      }
+                    }}
+                    disabled={!baseImage || !itemImage || isGenerating}
+                    size="lg"
+                    className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white border-0 px-8 py-3 text-lg font-semibold disabled:opacity-50"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                        Step {currentStep} 実行中...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-5 h-5 mr-2" />
+                        全ステップ実行
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -21,9 +21,13 @@ interface DraggableOverlayProps {
 }
 
 const DraggableOverlay: React.FC<DraggableOverlayProps> = ({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   baseImage,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   itemImage,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   itemPosition,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   isDragging,
   canvasRef,
   handleMouseDown,

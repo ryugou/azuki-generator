@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git switch:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(docker-compose logs:*)",
+      "Bash(curl:*)",
+      "Bash(lsof:*)",
+      "Bash(find:*)",
+      "Bash(docker logs:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": []
+  }
+}
