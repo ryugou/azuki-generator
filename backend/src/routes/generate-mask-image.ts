@@ -98,10 +98,19 @@ router.post('/', async (req, res, next): Promise<any> => {
     }
 
     console.log(`Generated mask for missing_part: ${missing_part}, size: ${width}x${height}`);
+    console.log('Mask buffer length:', maskBuffer.length);
 
-    // 画像として直接レスポンス
-    res.set('Content-Type', 'image/png');
-    res.send(maskBuffer);
+    // 画像として直接レスポンス（CORS設定を一時的に変更、圧縮無効化）
+    res.set({
+      'Content-Type': 'image/png',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Credentials': 'false',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    res.removeHeader('Content-Encoding');
+    res.end(maskBuffer);
   } catch (error) {
     next(error);
   }

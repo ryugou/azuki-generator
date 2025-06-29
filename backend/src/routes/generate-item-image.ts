@@ -18,7 +18,7 @@ function getOpenAIClient() {
   });
 }
 
-router.post('/', async (req, res, next): Promise<any> => {
+router.post('/', async (req, res): Promise<any> => {
   try {
     const { base_image, mask_image, prompt } = req.body;
 
@@ -41,6 +41,7 @@ router.post('/', async (req, res, next): Promise<any> => {
     const tempDir = '/tmp';
     const baseImagePath = path.join(tempDir, `base_${uuidv4()}.png`);
     const maskImagePath = path.join(tempDir, `mask_${uuidv4()}.png`);
+    let debugImagePath: string | undefined;
 
     try {
       // Base64をファイルに書き込み
@@ -75,22 +76,46 @@ router.post('/', async (req, res, next): Promise<any> => {
 
       console.log('DALL-E Edit completed, returned image base64 length:', generatedImageBase64.length);
 
+      // デバッグ: 生成された画像をローカルに保存
+      debugImagePath = path.join(tempDir, `debug_generated_${uuidv4()}.png`);
+      await fs.writeFile(debugImagePath, Buffer.from(generatedImageBase64, 'base64'));
+      console.log('Debug image saved to:', debugImagePath);
+
       // Base64をBufferに変換して画像として返す
       const imageBuffer = Buffer.from(generatedImageBase64, 'base64');
+      console.log('Image buffer length:', imageBuffer.length);
+      
       res.set('Content-Type', 'image/png');
-      res.send(imageBuffer);
+      res.set('Content-Length', imageBuffer.length.toString());
+      res.end(imageBuffer);
     } finally {
       // 一時ファイルを削除
       try {
         await fs.unlink(baseImagePath);
         await fs.unlink(maskImagePath);
+        // デバッグファイルも削除（存在する場合）
+        if (debugImagePath && fsSync.existsSync(debugImagePath)) {
+          await fs.unlink(debugImagePath);
+        }
       } catch (err) {
         console.error('Failed to clean up temp files:', err);
       }
     }
   } catch (error) {
     console.error('DALL-E Edit API error:', error);
-    next(error);
+    
+    // OpenAI APIエラーの場合
+    if (error instanceof Error && 'status' in error) {
+      return res.status(error.status as number || 500).json({ 
+        error: error.message,
+        details: 'error' in error ? error.error : undefined 
+      });
+    }
+    
+    // その他のエラー
+    return res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Internal server error' 
+    });
   }
 });
 
