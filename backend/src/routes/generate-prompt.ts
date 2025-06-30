@@ -20,12 +20,16 @@ router.post('/', async (req, res, next): Promise<any> => {
   try {
     const requestBody = req.body as GeneratePromptRequest;
     const imageInfo = requestBody['image-info'];
-    const model = requestBody.model || 'dalle';
+    const model = requestBody.model;
 
     console.log('Received model parameter:', model);
 
     if (!imageInfo) {
       return res.status(400).json({ error: 'image-info is required' });
+    }
+
+    if (!model) {
+      return res.status(400).json({ error: 'model is required' });
     }
 
     const { style, color, species, expression, missing_part } = imageInfo;

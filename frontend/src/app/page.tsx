@@ -317,46 +317,57 @@ export default function ImageComposer() {
       const step2Data = await step2Response.json();
       console.log("Step 2 完了:", step2Data);
 
-      // Step 3: マスク画像生成
-      setCurrentStep(3);
-      setProgressMessage("マスク画像を生成しています...");
-      
-      const step3Response = await fetch(`${BACKEND_URL}/api/generate-mask-image`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          item_image: itemImageData,
-          missing_part: step1Data.missing_part,
-          model: selectedModel,
-        }),
-      });
+      // Step 3: マスク画像生成（HuggingFaceの場合はスキップ）
+      let step3Base64 = "";
+      if (!selectedModel.startsWith('huggingface-')) {
+        setCurrentStep(3);
+        setProgressMessage("マスク画像を生成しています...");
+        
+        const step3Response = await fetch(`${BACKEND_URL}/api/generate-mask-image`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            item_image: itemImageData,
+            missing_part: step1Data.missing_part,
+            model: selectedModel,
+          }),
+        });
 
-      if (!step3Response.ok) {
-        const errorData = await step3Response.json();
-        throw new Error(`Step 3 エラー: ${errorData.error || 'Unknown error'}`);
+        if (!step3Response.ok) {
+          const errorData = await step3Response.json();
+          throw new Error(`Step 3 エラー: ${errorData.error || 'Unknown error'}`);
+        }
+
+        const step3Blob = await step3Response.blob();
+        step3Base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string).split(',')[1]);
+          reader.readAsDataURL(step3Blob);
+        });
+        console.log("Step 3 完了: マスク画像生成");
+      } else {
+        console.log("Step 3 スキップ: HuggingFaceモデルはマスク不要");
       }
-
-      const step3Blob = await step3Response.blob();
-      const step3Base64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve((reader.result as string).split(',')[1]);
-        reader.readAsDataURL(step3Blob);
-      });
-      console.log("Step 3 完了: マスク画像生成");
 
       // Step 4: AI画像生成
       setCurrentStep(4);
       setProgressMessage("AIが画像を補完しています...");
       
+      const step4Body: { base_image: string; prompt: string; model: string; mask_image?: string } = {
+        base_image: itemImageData,
+        prompt: step2Data.prompt,
+        model: selectedModel,
+      };
+      
+      // マスクが必要な場合のみ追加
+      if (step3Base64) {
+        step4Body.mask_image = step3Base64;
+      }
+      
       const step4Response = await fetch(`${BACKEND_URL}/api/generate-item-image`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          base_image: itemImageData,
-          mask_image: step3Base64,
-          prompt: step2Data.prompt,
-          model: selectedModel,
-        }),
+        body: JSON.stringify(step4Body),
       });
 
       if (!step4Response.ok) {

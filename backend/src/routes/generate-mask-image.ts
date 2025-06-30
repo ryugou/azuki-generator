@@ -6,7 +6,9 @@ const router = Router();
 
 router.post('/', async (req, res, next): Promise<any> => {
   try {
-    const { item_image, missing_part } = req.body;
+    const { item_image, missing_part, model } = req.body;
+
+    console.log('Received model parameter:', model);
 
     if (!item_image) {
       return res.status(400).json({ error: 'item_image is required' });
@@ -14,6 +16,25 @@ router.post('/', async (req, res, next): Promise<any> => {
 
     if (!missing_part) {
       return res.status(400).json({ error: 'missing_part is required' });
+    }
+
+    // HuggingFace系はマスクを使わないため、空画像を返す
+    if (model && model.startsWith('huggingface-')) {
+      console.log('HuggingFace model detected, returning empty mask');
+      const emptyMaskBuffer = await sharp({
+        create: {
+          width: 512,
+          height: 512,
+          channels: 3,
+          background: { r: 0, g: 0, b: 0 }
+        }
+      })
+      .png()
+      .toBuffer();
+      
+      res.set('Content-Type', 'image/png');
+      res.send(emptyMaskBuffer);
+      return;
     }
 
     // Base64をBufferに変換
