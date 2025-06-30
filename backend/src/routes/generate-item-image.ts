@@ -112,21 +112,27 @@ router.post('/', async (req, res): Promise<any> => {
         .png()
         .toBuffer();
 
-      console.log(`Expanded image to ${maskWidth}x${maskHeight} with offset (${offsetX}, ${offsetY})`);
-
       // 拡張された画像とマスク画像をファイルに保存
       await fs.writeFile(baseImagePath, expandedImageBuffer);
       await fs.writeFile(maskImagePath, maskImageBuffer);
 
-      // デバッグ: 入力されたbase_image（元画像）とexpanded_image（拡張後）を保存
-      const debugInputPath = path.join(process.cwd(), `debug_input_item_${Date.now()}.png`);
-      await fs.writeFile(debugInputPath, Buffer.from(base_image, 'base64'));
-      console.log('Debug input item image saved to:', debugInputPath);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`Expanded image to ${maskWidth}x${maskHeight} with offset (${offsetX}, ${offsetY})`);
+        
+        // デバッグ: 入力されたbase_image（元画像）とexpanded_image（拡張後）を保存
+        try {
+          const debugInputPath = path.join(process.cwd(), `debug_input_item_${Date.now()}.png`);
+          await fs.writeFile(debugInputPath, Buffer.from(base_image, 'base64'));
+          console.log('Debug input item image saved to:', debugInputPath);
 
-      const debugExpandedPath = '/app/tmp/expanded_image.png';
-      await fs.writeFile(debugExpandedPath, expandedImageBuffer);
-      console.log('Debug expanded image saved to:', debugExpandedPath);
-      console.log('ローカルPCからは backend/tmp/expanded_image.png でアクセス可能');
+          await fs.mkdir('./tmp', { recursive: true });
+          const debugExpandedPath = './tmp/expanded_image.png';
+          await fs.writeFile(debugExpandedPath, expandedImageBuffer);
+          console.log('Debug expanded image saved to:', debugExpandedPath);
+        } catch (debugError) {
+          console.warn('Debug file save failed:', debugError);
+        }
+      }
 
       // DALL-E Edit APIを呼び出し - toFileを使用
       const openai = getOpenAIClient();
@@ -154,22 +160,30 @@ router.post('/', async (req, res): Promise<any> => {
         throw new Error('No image data in DALL-E response');
       }
 
-      console.log('DALL-E Edit completed, returned image base64 length:', generatedImageBase64.length);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('DALL-E Edit completed, returned image base64 length:', generatedImageBase64.length);
 
-      // デバッグ: 生成された画像をローカルに保存（プロジェクトルートに保存）
-      debugImagePath = path.join(process.cwd(), `debug_generated_${Date.now()}.png`);
-      await fs.writeFile(debugImagePath, Buffer.from(generatedImageBase64, 'base64'));
-      console.log('Debug image saved to:', debugImagePath);
+        // デバッグ: 生成された画像をローカルに保存（開発環境のみ）
+        try {
+          debugImagePath = path.join(process.cwd(), `debug_generated_${Date.now()}.png`);
+          await fs.writeFile(debugImagePath, Buffer.from(generatedImageBase64, 'base64'));
+          console.log('Debug image saved to:', debugImagePath);
 
-      // デバッグ: 生成された画像を backend/tmp/result.png として保存（Dockerボリューム経由でローカルにアクセス可能）
-      const resultPath = '/app/tmp/result.png';
-      await fs.writeFile(resultPath, Buffer.from(generatedImageBase64, 'base64'));
-      console.log('DALL-E generated image saved to:', resultPath);
-      console.log('ローカルPCからは backend/tmp/result.png でアクセス可能');
+          await fs.mkdir('./tmp', { recursive: true });
+          const resultPath = './tmp/result.png';
+          await fs.writeFile(resultPath, Buffer.from(generatedImageBase64, 'base64'));
+          console.log('DALL-E generated image saved to:', resultPath);
+        } catch (debugError) {
+          console.warn('Debug file save failed:', debugError);
+        }
+      }
 
       // Base64をBufferに変換して画像として返す
       const imageBuffer = Buffer.from(generatedImageBase64, 'base64');
-      console.log('Image buffer length:', imageBuffer.length);
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Image buffer length:', imageBuffer.length);
+      }
       
       res.set('Content-Type', 'image/png');
       res.set('Content-Length', imageBuffer.length.toString());

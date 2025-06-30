@@ -1,4 +1,7 @@
 {
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
   "env": {
     "NEXT_PUBLIC_BACKEND_URL": "https://azuki-backend-wk2dp7dnwa-an.a.run.app"
   },

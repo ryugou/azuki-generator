@@ -99,7 +99,9 @@ router.post('/', async (req, res, next): Promise<any> => {
       throw new Error('Failed to parse GPT-4o response as JSON');
     }
 
-    console.log('GPT-4o analysis result:', result);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('GPT-4o analysis result:', result);
+    }
 
     res.json(result);
   } catch (error) {
