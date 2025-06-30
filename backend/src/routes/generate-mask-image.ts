@@ -160,15 +160,21 @@ router.post('/', async (req, res, next): Promise<any> => {
         .toBuffer();
     }
 
-    console.log(`Generated mask for missing_part: ${missing_part}`);
-    console.log(`Original size: ${originalWidth}x${originalHeight}, Expanded size: ${expandedWidth}x${expandedHeight}`);
-    console.log('Mask buffer length:', maskBuffer.length);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`Generated mask for missing_part: ${missing_part}`);
+      console.log(`Original size: ${originalWidth}x${originalHeight}, Expanded size: ${expandedWidth}x${expandedHeight}`);
+      console.log('Mask buffer length:', maskBuffer.length);
 
-    // デバッグ: マスク画像を backend/tmp/mask.png として保存
-    const maskPath = '/app/tmp/mask.png';
-    await fs.writeFile(maskPath, maskBuffer);
-    console.log('Mask image saved to:', maskPath);
-    console.log('ローカルPCからは backend/tmp/mask.png でアクセス可能');
+      // デバッグ: マスク画像を backend/tmp/mask.png として保存（開発環境のみ）
+      try {
+        const maskPath = './tmp/mask.png';
+        await fs.mkdir('./tmp', { recursive: true });
+        await fs.writeFile(maskPath, maskBuffer);
+        console.log('Mask image saved to:', maskPath);
+      } catch (debugError) {
+        console.warn('Debug file save failed:', debugError);
+      }
+    }
 
     // 画像として直接レスポンス（CORS設定を一時的に変更、圧縮無効化）
     res.set({
