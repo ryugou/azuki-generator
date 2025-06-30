@@ -18,7 +18,11 @@
       "Bash(ls:*)",
       "Bash(base64:*)",
       "Bash(git pull:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(gcloud config get-value:*)",
+      "Bash(gcloud run deploy:*)",
+      "Bash(gcloud builds:*)",
+      "Bash(gcloud run services:*)"
     ],
     "deny": []
   }

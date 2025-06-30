@@ -7,14 +7,13 @@
 .env
 .env.example
 README.md
-Dockerfile
 node_modules/
 test-*.js
 *.http
 debug_images/
 images/
-src/
 *.swp
 *.swo
 *~
 .DS_Store
+tmp/

@@ -1,0 +1,10 @@
+{
+  "env": {
+    "NEXT_PUBLIC_BACKEND_URL": "https://azuki-backend-wk2dp7dnwa-an.a.run.app"
+  },
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_BACKEND_URL": "https://azuki-backend-wk2dp7dnwa-an.a.run.app"
+    }
+  }
+}
