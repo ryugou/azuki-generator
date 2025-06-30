@@ -24,7 +24,7 @@ router.post('/', async (req, res, next): Promise<any> => {
       return res.status(400).json({ error: 'model is required' });
     }
 
-    let imageBuffer: Buffer;
+    let imageBuffer: Buffer | undefined;
 
     if (process.env.NODE_ENV === 'development') {
       console.log(`Generating image with ${model}...`);
@@ -102,14 +102,15 @@ router.post('/', async (req, res, next): Promise<any> => {
       console.log('=== HUGGINGFACE API CALLED ===');
 
       let modelName: string;
-      if (model === 'huggingface-sd-v1') {
-        modelName = 'runwayml/stable-diffusion-v1-5';
-      } else if (model === 'huggingface-sd-api') {
-        modelName = 'stabilityai/stable-diffusion-2-1';
+      if (model === 'huggingface-flux') {
+        modelName = 'black-forest-labs/FLUX.1-schnell';
       } else {
         throw new Error('Unknown Hugging Face model');
       }
 
+      console.log(`Calling HuggingFace model: ${modelName}`);
+      console.log(`API URL: https://api-inference.huggingface.co/models/${modelName}`);
+      
       const response = await fetch(`https://api-inference.huggingface.co/models/${modelName}`, {
         method: 'POST',
         headers: {
@@ -118,21 +119,28 @@ router.post('/', async (req, res, next): Promise<any> => {
         },
         body: JSON.stringify({
           inputs: prompt,
-          parameters: {
-            num_inference_steps: 20,
-            guidance_scale: 7.5,
+          options: {
+            wait_for_model: true,
+            use_cache: false,
           },
         }),
       });
 
+      console.log(`HuggingFace response status: ${response.status} ${response.statusText}`);
+
       if (!response.ok) {
         const errorText = await response.text();
+        console.log(`HuggingFace error response: ${errorText}`);
         throw new Error(`Hugging Face API error: ${response.statusText} - ${errorText}`);
       }
 
       imageBuffer = Buffer.from(await response.arrayBuffer());
     } else {
       throw new Error(`Unsupported model: ${model}`);
+    }
+
+    if (!imageBuffer) {
+      throw new Error('Failed to generate image');
     }
 
     if (process.env.NODE_ENV === 'development') {
