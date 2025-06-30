@@ -9,6 +9,7 @@ import { Sparkles } from "lucide-react";
 import ImageUploader from "@/components/ImageUploader";
 import DraggableOverlay from "@/components/DraggableOverlay";
 import ResultViewer from "@/components/ResultViewer";
+import ErrorModal from "@/components/ErrorModal";
 import { loadImage } from "@/lib/utils";
 
 interface Position {
@@ -24,8 +25,13 @@ export default function ImageComposer() {
   const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
   const [composedImage, setComposedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [currentStep, setCurrentStep] = useState<number>(1);
-  const [stepResults, setStepResults] = useState<Record<number, any>>({});
+  const [currentStep, setCurrentStep] = useState<number>(0);
+  const [progressMessage, setProgressMessage] = useState<string>("");
+  const [errorModal, setErrorModal] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+  });
 
   const canvasRef = useRef<HTMLCanvasElement>(
     null
@@ -234,10 +240,12 @@ export default function ImageComposer() {
     setIsDragging(false);
   };
 
-  const callAPIStep = async (step: number) => {
+  const executeAllSteps = async () => {
     if (!baseImage || !itemImage) return;
 
     setIsGenerating(true);
+    setCurrentStep(0);
+    setComposedImage(null);
 
     try {
       // バックエンドのURL
@@ -269,112 +277,158 @@ export default function ImageComposer() {
       const scaleX = baseImage.width / displayCanvas.width;
       const scaleY = baseImage.height / displayCanvas.height;
 
-      let endpoint = "";
-      let requestBody: any = {};
-
-      switch (step) {
-        case 1:
-          endpoint = "/api/analyze-item-image";
-          requestBody = {
-            item_image: itemImageData,
-          };
-          break;
-        case 2:
-          endpoint = "/api/generate-prompt";
-          requestBody = {
-            "image-info": stepResults[1],
-          };
-          break;
-        case 3:
-          endpoint = "/api/generate-mask-image";
-          requestBody = {
-            item_image: itemImageData,
-            missing_part: stepResults[1]?.missing_part,
-          };
-          break;
-        case 4:
-          endpoint = "/api/generate-item-image";
-          requestBody = {
-            base_image: itemImageData,
-            mask_image: stepResults[3]?.mask_image,
-            prompt: stepResults[2]?.prompt,
-          };
-          break;
-        case 5:
-          endpoint = "/api/remove-background";
-          requestBody = {
-            image: stepResults[4]?.generated_image,
-          };
-          break;
-        case 6:
-          endpoint = "/api/generate";
-          requestBody = {
-            base_image: baseImageData,
-            item_image: stepResults[5]?.transparent_image,
-            position: {
-              x: Math.round(itemPosition.x * scaleX),
-              y: Math.round(itemPosition.y * scaleY),
-            },
-          };
-          break;
-      }
-
-      console.log(`Step ${step} - Calling ${endpoint}:`, requestBody);
-
-      const response = await fetch(`${BACKEND_URL}${endpoint}`, {
+      // Step 1: 画像分析
+      setCurrentStep(1);
+      setProgressMessage("アイテム画像を分析しています...");
+      
+      const step1Response = await fetch(`${BACKEND_URL}/api/analyze-item-image`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_image: itemImageData }),
       });
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Backend API error: ${error}`);
+      if (!step1Response.ok) {
+        const errorData = await step1Response.json();
+        throw new Error(`Step 1 エラー: ${errorData.error || 'Unknown error'}`);
       }
 
-      // 画像を返すAPIの場合はBase64に変換
-      const contentType = response.headers.get('content-type');
-      let data: any;
+      const step1Data = await step1Response.json();
+      console.log("Step 1 完了:", step1Data);
+
+      // Step 2: プロンプト生成
+      setCurrentStep(2);
+      setProgressMessage("補完用プロンプトを生成しています...");
       
-      if (contentType && contentType.includes('image/')) {
-        const blob = await response.blob();
-        const base64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve((reader.result as string).split(',')[1]);
-          reader.readAsDataURL(blob);
-        });
-        
-        // APIのエンドポイントに応じて適切なキー名で保存
-        if (endpoint.includes('mask')) data = { mask_image: base64 };
-        else if (endpoint.includes('item-image')) data = { generated_image: base64 };
-        else if (endpoint.includes('background')) data = { transparent_image: base64 };
-      } else {
-        // JSONレスポンスの場合
-        data = await response.json();
+      const step2Response = await fetch(`${BACKEND_URL}/api/generate-prompt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ "image-info": step1Data }),
+      });
+
+      if (!step2Response.ok) {
+        const errorData = await step2Response.json();
+        throw new Error(`Step 2 エラー: ${errorData.error || 'Unknown error'}`);
       }
 
-      console.log(`Step ${step} レスポンス:`, data);
+      const step2Data = await step2Response.json();
+      console.log("Step 2 完了:", step2Data);
 
-      // 各ステップの結果を保存
-      setStepResults(prev => ({
-        ...prev,
-        [step]: data,
-      }));
+      // Step 3: マスク画像生成
+      setCurrentStep(3);
+      setProgressMessage("マスク画像を生成しています...");
+      
+      const step3Response = await fetch(`${BACKEND_URL}/api/generate-mask-image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          item_image: itemImageData,
+          missing_part: step1Data.missing_part,
+        }),
+      });
 
-      // Step 6の場合は最終画像を設定
-      if (step === 6) {
-        setComposedImage(data.result_image);
+      if (!step3Response.ok) {
+        const errorData = await step3Response.json();
+        throw new Error(`Step 3 エラー: ${errorData.error || 'Unknown error'}`);
       }
+
+      const step3Blob = await step3Response.blob();
+      const step3Base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.readAsDataURL(step3Blob);
+      });
+      console.log("Step 3 完了: マスク画像生成");
+
+      // Step 4: DALL-E画像生成
+      setCurrentStep(4);
+      setProgressMessage("AIが画像を補完しています...");
+      
+      const step4Response = await fetch(`${BACKEND_URL}/api/generate-item-image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          base_image: itemImageData,
+          mask_image: step3Base64,
+          prompt: step2Data.prompt,
+        }),
+      });
+
+      if (!step4Response.ok) {
+        const errorData = await step4Response.json();
+        throw new Error(`Step 4 エラー: ${errorData.error || 'Unknown error'}`);
+      }
+
+      const step4Blob = await step4Response.blob();
+      const step4Base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.readAsDataURL(step4Blob);
+      });
+      console.log("Step 4 完了: DALL-E画像生成");
+
+      // Step 5: 背景除去
+      setCurrentStep(5);
+      setProgressMessage("背景を除去しています...");
+      
+      const step5Response = await fetch(`${BACKEND_URL}/api/remove-background`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: step4Base64 }),
+      });
+
+      if (!step5Response.ok) {
+        const errorData = await step5Response.json();
+        throw new Error(`Step 5 エラー: ${errorData.error || 'Unknown error'}`);
+      }
+
+      const step5Blob = await step5Response.blob();
+      const step5Base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.readAsDataURL(step5Blob);
+      });
+      console.log("Step 5 完了: 背景除去");
+
+      // Step 6: 最終合成
+      setCurrentStep(6);
+      setProgressMessage("最終画像を合成しています...");
+      
+      const step6Response = await fetch(`${BACKEND_URL}/api/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          base_image: baseImageData,
+          item_image: step5Base64,
+          position: {
+            x: Math.round(itemPosition.x * scaleX),
+            y: Math.round(itemPosition.y * scaleY),
+          },
+        }),
+      });
+
+      if (!step6Response.ok) {
+        const errorData = await step6Response.json();
+        throw new Error(`Step 6 エラー: ${errorData.error || 'Unknown error'}`);
+      }
+
+      const step6Data = await step6Response.json();
+      console.log("Step 6 完了:", step6Data);
+
+      setComposedImage(step6Data.result_image);
+      setProgressMessage("完了！");
 
     } catch (error) {
-      console.error(`Step ${step} Error:`, error);
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error occurred";
-      alert(`Step ${step} の処理に失敗しました: ${errorMessage}`);
+      console.error("Processing Error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      
+      setErrorModal({
+        isOpen: true,
+        title: "処理エラー",
+        message: `処理に失敗しました: ${errorMessage}`,
+      });
     } finally {
       setIsGenerating(false);
+      setCurrentStep(0);
     }
   };
 
@@ -382,26 +436,47 @@ export default function ImageComposer() {
     if (!composedImage) return;
 
     try {
+      let blob: Blob;
+      
       if (composedImage.startsWith("data:")) {
-        // Data URLの場合は直接ダウンロード
-        const link = document.createElement("a");
-        link.download = "azuki-generated.png";
-        link.href = composedImage;
-        link.click();
+        // Data URLをBlobに変換
+        const base64 = composedImage.split(',')[1];
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        blob = new Blob([byteArray], { type: 'image/png' });
       } else {
         // GCS URLから画像をフェッチ
         const response = await fetch(composedImage);
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-
-        const link = document.createElement("a");
-        link.download = "azuki-generated.png";
-        link.href = url;
-        link.click();
-
-        // クリーンアップ
-        URL.revokeObjectURL(url);
+        blob = await response.blob();
       }
+
+      // Blob URLを作成
+      const url = URL.createObjectURL(blob);
+      
+      // ダウンロードリンクを作成
+      const link = document.createElement("a");
+      link.download = "azuki-generated.png";
+      link.href = url;
+      link.style.display = "none";
+      
+      // Firefoxの場合はクリックイベントを手動でトリガー
+      if (navigator.userAgent.includes('Firefox')) {
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+      }
+      
+      document.body.appendChild(link);
+      link.click();
+      
+      // クリーンアップ
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 100);
     } catch (error) {
       console.error("Download error:", error);
       // フォールバック: 直接URLを開く
@@ -468,104 +543,36 @@ export default function ImageComposer() {
               />
               
               {/* Processing Controls */}
-              <div className="space-y-4 mt-6">
-                {/* ステップボタン */}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {[1, 2, 3, 4, 5, 6].map((step) => (
-                    <Button
-                      key={step}
-                      onClick={() => callAPIStep(step)}
-                      disabled={!baseImage || !itemImage || isGenerating || (step > 1 && !stepResults[step - 1])}
-                      size="sm"
-                      variant={stepResults[step] ? "default" : "outline"}
-                      className={`text-sm ${
-                        stepResults[step] 
-                          ? "bg-green-600 hover:bg-green-700 text-white" 
-                          : "border-purple-400 text-purple-400 hover:bg-purple-400 hover:text-white"
-                      }`}
-                    >
-                      {isGenerating && currentStep === step ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-1"></div>
-                      ) : stepResults[step] ? (
-                        "✓"
-                      ) : null}
-                      Step {step}
-                    </Button>
-                  ))}
-                </div>
-
-                {/* ステップ結果表示 */}
-                {Object.keys(stepResults).length > 0 && (
-                  <div className="mt-4 p-4 bg-slate-700/50 rounded-lg">
-                    <h3 className="text-purple-400 font-semibold mb-2">処理結果:</h3>
-                    <div className="space-y-2 text-sm">
-                      {Object.entries(stepResults).map(([step, result]) => (
-                        <div key={step} className="text-slate-300">
-                          <span className="text-green-400">Step {step}:</span> {
-                            step === "1" ? `${result.species} (${result.color}) - ${result.missing_part}` :
-                            step === "2" ? `プロンプト生成完了: ${result.prompt?.substring(0, 50)}...` :
-                            step === "3" ? "マスク画像生成完了" :
-                            step === "4" ? "DALL-E画像生成完了" :
-                            step === "5" ? "背景除去完了" :
-                            step === "6" ? "最終合成完了" : "完了"
-                          }
-                          {/* 画像プレビュー（開発環境のみ） */}
-                          {process.env.NODE_ENV === "development" && (
-                            <>
-                              {step === "3" && result.mask_image && (
-                                <div className="mt-2">
-                                  <a 
-                                    href={`data:image/png;base64,${result.mask_image}`} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="text-blue-400 hover:underline text-xs"
-                                  >
-                                    マスク画像を確認 →
-                                  </a>
-                                </div>
-                              )}
-                              {step === "4" && result.generated_image && (
-                                <div className="mt-2">
-                                  <a 
-                                    href={`data:image/png;base64,${result.generated_image}`} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="text-blue-400 hover:underline text-xs"
-                                  >
-                                    DALL-E生成画像を確認 →
-                                  </a>
-                                </div>
-                              )}
-                              {step === "5" && result.transparent_image && (
-                                <div className="mt-2">
-                                  <a 
-                                    href={`data:image/png;base64,${result.transparent_image}`} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="text-blue-400 hover:underline text-xs"
-                                  >
-                                    背景除去画像を確認 →
-                                  </a>
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      ))}
+              <div className="space-y-6 mt-6">
+                {/* プログレスバー */}
+                {isGenerating && (
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-purple-400 font-medium">進捗</span>
+                      <span className="text-slate-300">{currentStep}/6</span>
+                    </div>
+                    
+                    {/* プログレスバー */}
+                    <div className="w-full bg-slate-700 rounded-full h-2">
+                      <div 
+                        className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-300 ease-out"
+                        style={{ width: `${(currentStep / 6) * 100}%` }}
+                      ></div>
+                    </div>
+                    
+                    {/* 進捗メッセージ */}
+                    <div className="text-center">
+                      <p className="text-slate-300 text-sm">
+                        {progressMessage}
+                      </p>
                     </div>
                   </div>
                 )}
 
-                <div className="flex justify-center pt-4">
+                {/* 実行ボタン */}
+                <div className="flex justify-center">
                   <Button
-                    onClick={async () => {
-                      for (let step = 1; step <= 6; step++) {
-                        if (!stepResults[step]) {
-                          setCurrentStep(step);
-                          await callAPIStep(step);
-                        }
-                      }
-                    }}
+                    onClick={executeAllSteps}
                     disabled={!baseImage || !itemImage || isGenerating}
                     size="lg"
                     className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white border-0 px-8 py-3 text-lg font-semibold disabled:opacity-50"
@@ -573,12 +580,12 @@ export default function ImageComposer() {
                     {isGenerating ? (
                       <>
                         <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                        Step {currentStep} 実行中...
+                        処理中...
                       </>
                     ) : (
                       <>
                         <Sparkles className="w-5 h-5 mr-2" />
-                        全ステップ実行
+                        NFT生成開始
                       </>
                     )}
                   </Button>
@@ -596,6 +603,14 @@ export default function ImageComposer() {
 
         {/* 非表示の合成用キャンバス */}
         <canvas ref={composedCanvasRef} className="hidden" />
+        
+        {/* エラーモーダル */}
+        <ErrorModal
+          isOpen={errorModal.isOpen}
+          onClose={() => setErrorModal({ ...errorModal, isOpen: false })}
+          title={errorModal.title}
+          message={errorModal.message}
+        />
       </div>
     </div>
   );
