@@ -13,12 +13,16 @@ interface ImageInfo {
 
 interface GeneratePromptRequest {
   'image-info': ImageInfo;
+  model: string;
 }
 
 router.post('/', async (req, res, next): Promise<any> => {
   try {
     const requestBody = req.body as GeneratePromptRequest;
     const imageInfo = requestBody['image-info'];
+    const model = requestBody.model || 'dalle';
+
+    console.log('Received model parameter:', model);
 
     if (!imageInfo) {
       return res.status(400).json({ error: 'image-info is required' });
@@ -37,16 +41,33 @@ router.post('/', async (req, res, next): Promise<any> => {
       showingPart = 'lower body';
     }
 
-    // プロンプトの生成
     let prompt = '';
-    if (missing_part && missing_part !== 'none') {
-      prompt = `A ${style} illustration of a ${color} ${species} character${expressionPart}, currently only showing the ${showingPart}. Please complete the missing ${missing_part} naturally while preserving the style, color, and expression.`;
+    
+    // モデル別にプロンプトを生成
+    if (model.startsWith('huggingface-')) {
+      // HuggingFace系はマスクが使えないため、全体再生成用のプロンプト
+      if (missing_part && missing_part !== 'none') {
+        prompt = `A complete ${style} illustration of a ${color} ${species} character${expressionPart}, full body, clear details, centered composition`;
+      } else {
+        prompt = `A ${style} illustration of a ${color} ${species} character${expressionPart}, clear and detailed`;
+      }
+    } else if (model === 'replicate') {
+      // Replicate (Stable Diffusion) 用のプロンプト
+      if (missing_part && missing_part !== 'none') {
+        prompt = `A ${style} digital art of a ${color} ${species} character${expressionPart}, complete ${missing_part}, seamless inpainting, high quality, detailed`;
+      } else {
+        prompt = `A ${style} digital art of a ${color} ${species} character${expressionPart}, transparent background, high quality`;
+      }
     } else {
-      // 欠損がない場合は、背景除去のみのプロンプト
-      prompt = `A ${style} illustration of a ${color} ${species} character${expressionPart} with transparent background.`;
+      // DALL-E用のプロンプト（従来のまま）
+      if (missing_part && missing_part !== 'none') {
+        prompt = `A ${style} illustration of a ${color} ${species} character${expressionPart}, currently only showing the ${showingPart}. Please complete the missing ${missing_part} naturally while preserving the style, color, and expression.`;
+      } else {
+        prompt = `A ${style} illustration of a ${color} ${species} character${expressionPart} with transparent background.`;
+      }
     }
 
-    console.log('Generated DALL-E prompt:', prompt);
+    console.log(`Generated ${model} prompt:`, prompt);
 
     res.json({ prompt });
   } catch (error) {

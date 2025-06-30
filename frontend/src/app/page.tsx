@@ -32,6 +32,7 @@ export default function ImageComposer() {
     title: "",
     message: "",
   });
+  const [selectedModel, setSelectedModel] = useState<string>("huggingface-sd-v1");
 
   const canvasRef = useRef<HTMLCanvasElement>(
     null
@@ -302,7 +303,10 @@ export default function ImageComposer() {
       const step2Response = await fetch(`${BACKEND_URL}/api/generate-prompt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ "image-info": step1Data }),
+        body: JSON.stringify({ 
+          "image-info": step1Data,
+          "model": selectedModel
+        }),
       });
 
       if (!step2Response.ok) {
@@ -323,6 +327,7 @@ export default function ImageComposer() {
         body: JSON.stringify({
           item_image: itemImageData,
           missing_part: step1Data.missing_part,
+          model: selectedModel,
         }),
       });
 
@@ -339,7 +344,7 @@ export default function ImageComposer() {
       });
       console.log("Step 3 完了: マスク画像生成");
 
-      // Step 4: DALL-E画像生成
+      // Step 4: AI画像生成
       setCurrentStep(4);
       setProgressMessage("AIが画像を補完しています...");
       
@@ -350,6 +355,7 @@ export default function ImageComposer() {
           base_image: itemImageData,
           mask_image: step3Base64,
           prompt: step2Data.prompt,
+          model: selectedModel,
         }),
       });
 
@@ -569,8 +575,28 @@ export default function ImageComposer() {
                   </div>
                 )}
 
-                {/* 実行ボタン */}
-                <div className="flex justify-center">
+                {/* モデル選択と実行ボタン */}
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                  {/* モデル選択 */}
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="model-select" className="text-slate-300 text-sm font-medium">
+                      モデル:
+                    </label>
+                    <select
+                      id="model-select"
+                      value={selectedModel}
+                      onChange={(e) => setSelectedModel(e.target.value)}
+                      disabled={isGenerating}
+                      className="bg-slate-700 border border-slate-600 text-slate-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50"
+                    >
+                      <option value="dalle">DALL-E</option>
+                      <option value="replicate">Replicate (Stable Diffusion)</option>
+                      <option value="huggingface-sd-v1">Hugging Face (SD v1.5)</option>
+                      <option value="huggingface-sd-api">Hugging Face (SD API)</option>
+                    </select>
+                  </div>
+
+                  {/* 実行ボタン */}
                   <Button
                     onClick={executeAllSteps}
                     disabled={!baseImage || !itemImage || isGenerating}
