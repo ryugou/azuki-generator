@@ -9,7 +9,16 @@
       "Bash(lsof:*)",
       "Bash(find:*)",
       "Bash(docker logs:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git checkout:*)",
+      "Bash(grep:*)",
+      "Bash(npm run build:*)",
+      "Bash(ls:*)",
+      "Bash(base64:*)",
+      "Bash(git pull:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": []
   }

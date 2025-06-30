@@ -12,6 +12,7 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account.json
     volumes:
       - ./src:/app/src
+      - ./tmp:/app/tmp
       - ./package.json:/app/package.json
       - ./package-lock.json:/app/package-lock.json
       - ./tsconfig.json:/app/tsconfig.json

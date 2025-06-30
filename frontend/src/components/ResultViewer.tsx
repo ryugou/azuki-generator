@@ -24,14 +24,11 @@ const ResultViewer: React.FC<ResultViewerProps> = ({
       <CardContent>
         <div className="space-y-6">
           <div className="flex justify-center">
-            <div className="relative">
-              <img
-                src={composedImage || "/placeholder.svg"}
-                alt="Generated NFT"
-                className="max-w-full h-auto border-2 border-emerald-400 rounded-lg shadow-2xl"
-              />
-              <div className="absolute -inset-1 bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-lg blur opacity-25"></div>
-            </div>
+            <img
+              src={composedImage || "/placeholder.svg"}
+              alt="Generated NFT"
+              className="max-w-full h-auto rounded-lg shadow-2xl"
+            />
           </div>
           <div className="flex justify-center">
             <Button
