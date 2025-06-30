@@ -32,7 +32,7 @@ export default function ImageComposer() {
     title: "",
     message: "",
   });
-  const [selectedModel, setSelectedModel] = useState<string>("huggingface-sd-v1");
+  const [selectedModel, setSelectedModel] = useState<string>("huggingface-flux");
 
   const canvasRef = useRef<HTMLCanvasElement>(
     null
@@ -602,8 +602,7 @@ export default function ImageComposer() {
                     >
                       <option value="dalle">DALL-E</option>
                       <option value="replicate">Replicate (Stable Diffusion)</option>
-                      <option value="huggingface-sd-v1">Hugging Face (SD v1.5)</option>
-                      <option value="huggingface-sd-api">Hugging Face (SD API)</option>
+                      <option value="huggingface-flux">Hugging Face (FLUX.1-schnell)</option>
                     </select>
                   </div>
 
